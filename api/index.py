@@ -14,11 +14,11 @@ class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
-        self.send_header('Access-Control-Allow-Origin', '*')  # ✅ CORS enabled
+        self.send_header('Access-Control-Allow-Origin', '*')  
         self.end_headers()
 
         # Load JSON data
-        json_path = os.path.join(os.path.dirname(__file__), '../students.json')
+        json_path = os.path.join(os.path.dirname(__file__), '../student.json')
         with open(json_path, 'r') as f:
             marks_data = json.load(f)
 
