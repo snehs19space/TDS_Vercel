@@ -1,41 +1,51 @@
-from http.server import BaseHTTPRequestHandler
+
+from fastapi import FastAPI, Query
+from fastapi.middleware.cors import CORSMiddleware
+from typing import List
 import json
-from urllib.parse import urlparse, parse_qs
 import os
 
-class handler(BaseHTTPRequestHandler):
-    def do_OPTIONS(self):
-        self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-        self.end_headers()
+# Initialize FastAPI app
+app = FastAPI()
 
-    def do_GET(self):
-        try:
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')  
-            self.end_headers()
+# Enable CORS for all origins
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins
+    allow_credentials=True,
+    allow_methods=["GET"],  # Only allow GET requests
+    allow_headers=["*"],
+)
 
-            # Load JSON from file (list format)
-            current_dir = os.path.dirname(__file__)
-            json_path = os.path.join(current_dir, '..', 'student.json')
+# Get the directory of the current file
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# Load student marks data from the same directory as this file
+with open(os.path.join(current_dir, 'q-vercel-python.json')) as f:
+    students_data = json.load(f)
 
-            with open(json_path, 'r') as f:
-                data_list = json.load(f)
+@app.get("/api")
+async def get_marks(name: List[str] = Query(None)):
+    """
+    Get marks for one or more students by name.
+    Example: /api?name=John&name=Alice
+    """
+    if not name:
+        return {"error": "Please provide at least one name"}
+    
+    marks = []
+    for student_name in name:
+        # Look for the student in the data
+        mark = next((student["marks"] for student in students_data 
+                     if student["name"].lower() == student_name.lower()), None)
+        marks.append(mark)
+    
+    return {"marks": marks}
 
-            # Convert to dictionary: { "name": marks }
-            marks_data = {entry['name']: entry['marks'] for entry in data_list}
+@app.get("/")
+async def root():
+    return {"message": "Student Marks API. Use /api?name=X&name=Y to get marks."}
 
-            # Parse query string
-            query = parse_qs(urlparse(self.path).query)
-            names = query.get('name', [])
-            result = [marks_data.get(name, None) for name in names]
-
-            self.wfile.write(json.dumps({ "marks": result }).encode())
-
-        except Exception as e:
-            self.send_response(500)
-            self.end_headers()
-            self.wfile.write(json.dumps({ "error": str(e) }).encode())
+# This allows running the app with Uvicorn directly
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("index:app", host="0.0.0.0", port=8000, reload=True)
