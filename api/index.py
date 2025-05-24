@@ -12,20 +12,27 @@ class handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        self.send_response(200)
-        self.send_header('Content-type', 'application/json')
-        self.send_header('Access-Control-Allow-Origin', '*')  
-        self.end_headers()
+        try:
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')  # ✅ Enable CORS
+            self.end_headers()
 
-        # Load JSON data
-        json_path = os.path.join(os.path.dirname(__file__), '../student.json')
-        with open(json_path, 'r') as f:
-            marks_data = json.load(f)
+            # Correct path to students.json file
+            current_dir = os.path.dirname(__file__)
+            json_path = os.path.join(current_dir, '..', 'students.json')
 
-        # Get ?name=... parameters
-        query = parse_qs(urlparse(self.path).query)
-        names = query.get('name', [])
-        result = [marks_data.get(name, None) for name in names]
+            with open(json_path, 'r') as f:
+                marks_data = json.load(f)
 
-        # Return JSON response
-        self.wfile.write(json.dumps({ "marks": result }).encode())
+            # Parse query parameters
+            query = parse_qs(urlparse(self.path).query)
+            names = query.get('name', [])
+            result = [marks_data.get(name, None) for name in names]
+
+            self.wfile.write(json.dumps({"marks": result}).encode())
+
+        except Exception as e:
+            self.send_response(500)
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": str(e)}).encode())
