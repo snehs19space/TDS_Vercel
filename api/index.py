@@ -1,47 +1,57 @@
-
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List
-import json
-import os
+import pandas as pd
+import numpy as np
+from pathlib import Path
 
-# Initialize FastAPI app
 app = FastAPI()
 
 # Enable CORS for all origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["GET"],  # Only allow GET requests
+    allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
-# Get the directory of the current file
-current_dir = os.path.dirname(os.path.abspath(__file__))
-# Load student marks data from the same directory as this file
-with open(os.path.join(current_dir, 'q-vercel-python.json')) as f:
-    students_data = json.load(f)
+# Load the dataset once when the app starts
+# The data file should be in the same directory as this script
+DATA_FILE = Path(__file__).parent / "q-vercel-latency.json"
+df = pd.read_json(DATA_FILE)
 
-@app.get("/api")
-async def get_marks(name: List[str] = Query(None)):
-    """
-    Get marks for one or more students by name.
-    Example: /api?name=John&name=Alice
-    """
-    if not name:
-        return {"error": "Please provide at least one name"}
-    
-    marks = []
-    for student_name in name:
-        # Look for the student in the data
-        mark = next((student["marks"] for student in students_data 
-                     if student["name"].lower() == student_name.lower()), None)
-        marks.append(mark)
-    
-    return {"marks": marks}
 
 @app.get("/")
 async def root():
-    return {"message": "Student Marks API. Use /api?name=X&name=Y to get marks."}
+    return {"message": "Vercel Latency Analytics API is running."}
 
+
+@app.post("/api/")
+async def get_latency_stats(request: Request):
+    payload = await request.json()
+    regions_to_process = payload.get("regions", [])
+    threshold = payload.get("threshold_ms", 200)
+
+    results = []
+
+    for region in regions_to_process:
+        region_df = df[df["region"] == region]
+
+        if not region_df.empty:
+            avg_latency = round(region_df["latency_ms"].mean(), 2)
+            p95_latency = round(np.percentile(region_df["latency_ms"], 95), 2)
+            avg_uptime = round(region_df["uptime_pct"].mean(), 3)
+            breaches = int(region_df[region_df["latency_ms"] > threshold].shape[0])
+
+            results.append(
+                {
+                    "region": region,
+                    "avg_latency": avg_latency,
+                    "p95_latency": p95_latency,
+                    "avg_uptime": avg_uptime,
+                    "breaches": breaches,
+                }
+            )
+
+    return {"regions": results}
